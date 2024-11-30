@@ -1,185 +1,171 @@
-import React, { useState } from "react";
-import { Camera, X, Loader } from "lucide-react";
-import { motion } from "framer-motion";
-import { useFormik } from "formik";
-import * as Yup from "yup";
+import React, { useState } from 'react';
+import { Share2, TrendingUp, Shield } from 'lucide-react';
+import { create } from "ipfs-http-client"; 
+import { PublicKey, Transaction } from '@solana/web3.js';
+import { useWallet } from '@solana/wallet-adapter-react';
 
-function Share() {
-  const [preview, setPreview] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
+const InvoiceUpload = () => {
+  const [file, setFile] = useState(null);
+  const [link, setLink] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const { publicKey, sendTransaction } = useWallet();
 
-  const formik = useFormik({
-    initialValues: {
-      item: "",
-      price: "",
-      quantity: "",
-      hsnNumber: "",
-      amount: "",
-      date: "",
-      time: "",
-    },
-    validationSchema: Yup.object({
-      item: Yup.string().required("Item is required"),
-      price: Yup.number()
-        .required("Price is required")
-        .positive("Price must be positive"),
-      quantity: Yup.number()
-        .required("Quantity is required")
-        .positive("Quantity must be positive"),
-      hsnNumber: Yup.string().required("HSN Number is required"),
-      amount: Yup.number()
-        .required("Amount is required")
-        .positive("Amount must be positive"),
-      date: Yup.date()
-        .required("Date is required")
-        .max(new Date(), "Date cannot be in the future"),
-      time: Yup.string().required("Time is required"),
-    }),
-    onSubmit: async (values) => {
-      setIsUploading(true);
-      try {
-        console.log("Form submitted:", values);
-        setPreview(null);
-        formik.resetForm();
-      } catch (error) {
-        console.error("Error submitting form:", error);
-      } finally {
-        setIsUploading(false);
-      }
-    },
-  });
+  const handleFileChange = (e) => {
+    if (e.target.files.length) {
+      setFile(e.target.files[0]);
+    }
+  };
+
+  const uploadToIPFS = async () => {
+    if (!file) {
+      alert("Please select a file!");
+      return;
+    }
+  
+    setUploading(true);
+    try {
+      console.log("Uploading file:", file);
+  
+      // Initialize IPFS client with Infura gateway
+      const ipfs = await create({ url: "https://ipfs.infura.io:5001/api/v0" });
+  
+      // Upload file to IPFS
+      const { cid } = await ipfs.add(file);
+      const generatedLink = `https://ipfs.io/ipfs/${cid}`;
+  
+      setLink(generatedLink);
+      alert("File uploaded successfully!");
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert(`Failed to upload file. Please try again. Error: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+  
+
+  const signAndSubmit = async () => {
+    if (!publicKey || !link) {
+      alert('Please connect your wallet and upload a file first!');
+      return;
+    }
+
+    try {
+      const transaction = new Transaction().add(
+        // Example instruction: Replace with your actual Solana smart contract logic
+        {
+          keys: [{ pubkey: publicKey, isSigner: true, isWritable: false }],
+          programId: new PublicKey('YOUR_PROGRAM_ID'),
+          data: Buffer.from(link), // Sending the IPFS link to the program
+        }
+      );
+
+      const signature = await sendTransaction(transaction);
+      alert(`Transaction submitted! Signature: ${signature}`);
+    } catch (error) {
+      console.error('Error submitting transaction:', error);
+      alert('Failed to submit transaction.');
+    }
+  };
 
   return (
-    <div className="container mx-auto px-4 py-10">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-lg shadow-lg dark:bg-gray-800 p-6"
+    <div className="space-y-4">
+      <input
+        type="file"
+        onChange={handleFileChange}
+        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+      />
+      <button
+        onClick={uploadToIPFS}
+        disabled={uploading}
+        className={`w-full px-4 py-2 text-white font-semibold rounded-md ${
+          uploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+        }`}
       >
-        <h1 className="text-3xl font-semibold text-gray-800 dark:text-gray-100 text-center">
-          Share to Earn
-        </h1>
-        <p className="text-gray-500 text-center mt-2">
-          Enter the details below to upload your information.
-        </p>
-
-        <form onSubmit={formik.handleSubmit} className="mt-6 space-y-4">
-          {/* Inputs for Item, Price, and Quantity */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <input
-                type="text"
-                placeholder="Item"
-                {...formik.getFieldProps("item")}
-                className="w-full p-2 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-              />
-              {formik.touched.item && formik.errors.item && (
-                <p className="text-sm text-red-500">{formik.errors.item}</p>
-              )}
-            </div>
-            <div>
-              <input
-                type="number"
-                placeholder="Price"
-                {...formik.getFieldProps("price")}
-                className="w-full p-2 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-              />
-              {formik.touched.price && formik.errors.price && (
-                <p className="text-sm text-red-500">{formik.errors.price}</p>
-              )}
-            </div>
-            <div>
-              <input
-                type="number"
-                placeholder="Quantity"
-                {...formik.getFieldProps("quantity")}
-                className="w-full p-2 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-              />
-              {formik.touched.quantity && formik.errors.quantity && (
-                <p className="text-sm text-red-500">{formik.errors.quantity}</p>
-              )}
-            </div>
-          </div>
-
-          {/* HSN Number and Amount */}
-          <div>
-            <input
-              type="text"
-              placeholder="HSN Number"
-              {...formik.getFieldProps("hsnNumber")}
-              className="w-full p-2 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-            />
-            {formik.touched.hsnNumber && formik.errors.hsnNumber && (
-              <p className="text-sm text-red-500">{formik.errors.hsnNumber}</p>
-            )}
-          </div>
-          <div>
-            <input
-              type="number"
-              placeholder="Amount"
-              {...formik.getFieldProps("amount")}
-              className="w-full p-2 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-            />
-            {formik.touched.amount && formik.errors.amount && (
-              <p className="text-sm text-red-500">{formik.errors.amount}</p>
-            )}
-          </div>
-
-          {/* Date and Time */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <input
-                type="date"
-                {...formik.getFieldProps("date")}
-                className="w-full p-2 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-              />
-              {formik.touched.date && formik.errors.date && (
-                <p className="text-sm text-red-500">{formik.errors.date}</p>
-              )}
-            </div>
-            <div>
-              <input
-                type="time"
-                {...formik.getFieldProps("time")}
-                className="w-full p-2 rounded-md border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-              />
-              {formik.touched.time && formik.errors.time && (
-                <p className="text-sm text-red-500">{formik.errors.time}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Photo Button */}
-          <button
-            type="button"
-            onClick={() => setPreview(null)}
-            className="w-full flex items-center justify-center bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800"
+        {uploading ? 'Uploading...' : 'Upload to IPFS'}
+      </button>
+      {link && (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-700">File Link:</p>
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-blue-500 underline"
           >
-            <Camera className="h-5 w-5 mr-2" />
-            Add Photo
-          </button>
-
-          {/* Submit Button */}
+            {link}
+          </a>
           <button
-            type="submit"
-            disabled={isUploading}
-            className={`w-full py-2 px-4 rounded-md text-white ${
-              isUploading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-            }`}
+            onClick={signAndSubmit}
+            className="w-full px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
           >
-            {isUploading ? (
-              <>
-                <Loader className="animate-spin h-5 w-5 inline-block mr-2" />
-                Uploading...
-              </>
-            ) : (
-              "Submit"
-            )}
+            Sign & Submit to Solana
           </button>
-        </form>
-      </motion.div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+const Share = () => {
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Share Invoices, Earn Rewards
+          </h1>
+          <p className="text-lg text-gray-600">
+            Upload your invoice bills securely to our decentralized storage and earn rewards
+            for contributing to our community database.
+          </p>
+        </div>
+
+        {/* Features */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          {[
+            {
+              icon: <Shield className="w-8 h-8 text-blue-500" />,
+              title: 'Secure Storage',
+              description: 'Your invoices are stored on decentralized IPFS network',
+            },
+            {
+              icon: <Share2 className="w-8 h-8 text-green-500" />,
+              title: 'Easy Sharing',
+              description: 'Share your invoices with anyone using a simple link',
+            },
+            {
+              icon: <TrendingUp className="w-8 h-8 text-purple-500" />,
+              title: 'Earn Rewards',
+              description: 'Get rewarded for contributing to our invoice database',
+            },
+          ].map((feature, index) => (
+            <div
+              key={index}
+              className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="flex flex-col items-center text-center">
+                {feature.icon}
+                <h3 className="mt-4 text-lg font-medium text-gray-900">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-sm text-gray-500">{feature.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Upload Section */}
+        <div className="bg-white p-8 rounded-xl shadow-md">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6 text-center">
+            Upload Your Invoice
+          </h2>
+          <InvoiceUpload />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default Share;
