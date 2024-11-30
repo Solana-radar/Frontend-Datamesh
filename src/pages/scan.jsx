@@ -40,27 +40,42 @@ const SmartReceipts = () => {
     tracks.forEach((track) => track.stop());
 
     setStep(3); // Move to processing step
-    simulateProcessing();
+    processCapturedImage(imageData);
+
   };
 
   // Simulate OCR & AI processing
-  const simulateProcessing = () => {
-    setTimeout(() => {
+  const processCapturedImage = async (imageDataUrl) => {
+    try {
+      const blob = await fetch(imageDataUrl).then((res) => res.blob());
+      const formData = new FormData();
+      formData.append("file", blob, "receipt.png");
+  
+      const response = await fetch("http://localhost:8000/process-invoice/", {
+        method: "POST",
+        body: formData,
+      });
+  
+      if (!response.ok) {
+        throw new Error("Failed to process image");
+      }
+  
+      const result = await response.json();
       setData({
-        store: "SuperMart",
-        amount: "$123.45",
-        date: "2024-11-29",
-        items: [
-          { name: "Milk", price: "$3.00" },
-          { name: "Bread", price: "$2.50" },
-          { name: "Eggs", price: "$4.00" },
-        ],
-        category: "Groceries",
-        timeFrame: "Monthly",
+        store: "Unknown", // Placeholder if store is not in result
+        amount: "Unknown", // Placeholder if amount is not parsed
+        date: "Unknown",   // Placeholder if date is not parsed
+        items: [],         // Placeholder if items are not extracted
+        category: result.category || "Uncategorized",
+        timeFrame: "Unknown",
       });
       setStep(4); // Move to results step
-    }, 3000);
+    } catch (error) {
+      console.error("Error processing receipt:", error);
+      setStep(1); // Reset to scanning on failure
+    }
   };
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-gray-900 text-white flex flex-col items-center justify-center p-6 space-y-8">
