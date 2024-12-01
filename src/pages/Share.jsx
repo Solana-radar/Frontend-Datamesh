@@ -1,172 +1,162 @@
 import React, { useState } from 'react';
-import bs58 from 'bs58';
-import nacl from 'tweetnacl';
-import crypto from 'crypto';
+import { Share2, TrendingUp, Shield } from 'lucide-react';
+import { create } from 'ipfs-http-client';
+import { PublicKey, Transaction } from '@solana/web3.js';
+import { useWallet } from '@solana/wallet-adapter-react';
 
-const SHDW_DRIVE_ENDPOINT = "https://shadow-storage.genesysgo.net"; // API Endpoint for uploading
-const STORAGE_ACCOUNT_PUBLIC_KEY = ""; // We'll populate this after creating the storage account
-
-const UploadFile = () => {
+const InvoiceUpload = () => {
   const [file, setFile] = useState(null);
-  const [signature, setSignature] = useState("");
-  const [message, setMessage] = useState("");
-  const [uploadStatus, setUploadStatus] = useState(null);
-  const [storageAccount, setStorageAccount] = useState(""); // To store the new storage account info
+  const [link, setLink] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const { publicKey, sendTransaction } = useWallet();
 
-  // Handle file selection
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    setFile(selectedFile);
-  };
-
-  // Generate message and signature for the file upload
-  const generateSignature = (fileName) => {
-    const hashSum = crypto.createHash("sha256");
-    hashSum.update(fileName);
-    const fileNameHash = hashSum.digest("hex");
-
-    const msg = `Shadow Drive Signed Message:\nStorage Account: ${STORAGE_ACCOUNT_PUBLIC_KEY}\nUpload files with hash: ${fileNameHash}`;
-    setMessage(msg);
-
-    const encodedMessage = new TextEncoder().encode(msg);
-    const signedMessage = nacl.sign.detached(encodedMessage, keypair.secretKey); // Replace `keypair` with actual keypair
-    const signature = bs58.encode(signedMessage);
-
-    setSignature(signature);
-  };
-
-  // Function to create a new storage account
-  const createStorageAccount = async () => {
-    try {
-      // Step 1: Generate transaction data for creating the storage account
-      const transactionData = generateCreateStorageAccountTransaction(); // Implement this function
-
-      // Step 2: Partially sign the transaction
-      const signedTransaction = signTransaction(transactionData); // Implement this function
-
-      // Here we skip sending the request to create the storage account as per your instructions
-      // This part would involve communicating with the storage service
-
-      setStorageAccount("uniqueStorageAccountID"); // Placeholder storage account ID
-      setUploadStatus(`Storage account created successfully: ${storageAccount}`);
-    } catch (error) {
-      setUploadStatus(`Error: ${error.message}`);
+    if (e.target.files.length) {
+      setFile(e.target.files[0]);
     }
   };
 
-  // Function to generate the create storage account transaction (customize as per your requirements)
-  const generateCreateStorageAccountTransaction = () => {
-    // Replace this with the actual logic for generating the transaction
-    const transaction = {
-      // Define the necessary fields for your transaction
-    };
-    return transaction;
+  const uploadToIPFS = async () => {
+    if (!file) {
+      alert('Please select a file!');
+      return;
+    }
+    setUploading(true);
+    try {
+      const ipfs = await create();
+      const { cid } = await ipfs.add(file);
+      const generatedLink = `https://ipfs.io/ipfs/${cid}`;
+      setLink(generatedLink);
+      alert('File uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file. Please try again.');
+    }
+    setUploading(false);
   };
 
-  // Function to sign the transaction (customize as per your requirements)
-  const signTransaction = (transaction) => {
-    // Sign the transaction using your private key (replace with actual signing logic)
-    const signedTransaction = nacl.sign.detached(new TextEncoder().encode(JSON.stringify(transaction)), keypair.secretKey);
-    return bs58.encode(signedTransaction);
-  };
-
-  // Handle file upload
-  const handleUpload = async (e) => {
-    e.preventDefault();
-
-    if (!file || !signature || !storageAccount) {
-      alert("Please provide a file, signature, and a storage account.");
+  const signAndSubmit = async () => {
+    if (!publicKey || !link) {
+      alert('Please connect your wallet and upload a file first!');
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", file, file.name);
-    formData.append("message", signature);
-    formData.append("signer", keypair.publicKey.toString());  // Replace with actual publicKey
-    formData.append("storage_account", storageAccount); // Use created storage account
-
     try {
-      const response = await fetch(`${SHDW_DRIVE_ENDPOINT}/upload`, {
-        method: 'POST',
-        body: formData
-      });
+      const transaction = new Transaction().add(
+        // Example instruction: Replace with your actual Solana smart contract logic
+        {
+          keys: [{ pubkey: publicKey, isSigner: true, isWritable: false }],
+          programId: new PublicKey('YOUR_PROGRAM_ID'),
+          data: Buffer.from(link), // Sending the IPFS link to the program
+        }
+      );
 
-      const result = await response.json();
-      if (response.ok) {
-        setUploadStatus(`File uploaded successfully: ${JSON.stringify(result)}`);
-      } else {
-        setUploadStatus(`Upload failed: ${JSON.stringify(result)}`);
-      }
+      const signature = await sendTransaction(transaction);
+      alert(`Transaction submitted! Signature: ${signature}`);
     } catch (error) {
-      setUploadStatus(`Error: ${error.message}`);
+      console.error('Error submitting transaction:', error);
+      alert('Failed to submit transaction.');
     }
   };
 
   return (
-    <div className="bg-gray-100 p-6 max-w-xl mx-auto rounded-lg shadow-lg">
-      <h2 className="text-2xl font-semibold text-center text-gray-800 mb-4">Share to Earn: Upload Your Invoice</h2>
-
-      <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">About ShadowDrive</h3>
-        <p className="text-gray-600">
-          ShadowDrive offers a secure, decentralized storage platform for your files. By uploading invoices, you can earn rewards, while keeping your data protected.
-        </p>
-      </div>
-
+    <div className="space-y-4">
+      <input
+        type="file"
+        onChange={handleFileChange}
+        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+      />
       <button
-        onClick={createStorageAccount}
-        className="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 focus:outline-none mb-4"
+        onClick={uploadToIPFS}
+        disabled={uploading}
+        className={`w-full px-4 py-2 text-white font-semibold rounded-md ${
+          uploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+        }`}
       >
-        Create Storage Account
+        {uploading ? 'Uploading...' : 'Upload to IPFS'}
       </button>
-
-      <form onSubmit={handleUpload} className="space-y-4">
-        <div>
-          <label htmlFor="file" className="block text-gray-700 font-semibold">Select File to Upload:</label>
-          <input
-            type="file"
-            id="file"
-            onChange={handleFileChange}
-            className="w-full mt-2 p-3 border border-gray-300 rounded-lg"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="message" className="block text-gray-700 font-semibold">Message to Sign:</label>
-          <textarea
-            id="message"
-            value={message}
-            readOnly
-            rows="4"
-            className="w-full mt-2 p-3 border border-gray-300 rounded-lg bg-gray-100"
-          />
-        </div>
-
-        <div className="flex space-x-4">
-          <button
-            type="button"
-            onClick={() => generateSignature(file?.name)}
-            className="w-1/2 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 focus:outline-none"
+      {link && (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-700">File Link:</p>
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-blue-500 underline"
           >
-            Generate Signature
-          </button>
+            {link}
+          </a>
           <button
-            type="submit"
-            className="w-1/2 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 focus:outline-none"
+            onClick={signAndSubmit}
+            className="w-full px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
           >
-            Upload File
+            Sign & Submit to Solana
           </button>
-        </div>
-      </form>
-
-      {uploadStatus && (
-        <div className="mt-6 bg-gray-100 p-4 rounded-lg shadow-md">
-          <h4 className="text-lg font-semibold text-gray-800">Upload Status:</h4>
-          <pre className="text-gray-700 mt-2">{uploadStatus}</pre>
         </div>
       )}
     </div>
   );
 };
 
-export default UploadFile;
+const Share = () => {
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Share Invoices, Earn Rewards
+          </h1>
+          <p className="text-lg text-gray-600">
+            Upload your invoice bills securely to our decentralized storage and earn rewards
+            for contributing to our community database.
+          </p>
+        </div>
+
+        {/* Features */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          {[
+            {
+              icon: <Shield className="w-8 h-8 text-blue-500" />,
+              title: 'Secure Storage',
+              description: 'Your invoices are stored on decentralized IPFS network',
+            },
+            {
+              icon: <Share2 className="w-8 h-8 text-green-500" />,
+              title: 'Easy Sharing',
+              description: 'Share your invoices with anyone using a simple link',
+            },
+            {
+              icon: <TrendingUp className="w-8 h-8 text-purple-500" />,
+              title: 'Earn Rewards',
+              description: 'Get rewarded for contributing to our invoice database',
+            },
+          ].map((feature, index) => (
+            <div
+              key={index}
+              className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="flex flex-col items-center text-center">
+                {feature.icon}
+                <h3 className="mt-4 text-lg font-medium text-gray-900">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-sm text-gray-500">{feature.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Upload Section */}
+        <div className="bg-white p-8 rounded-xl shadow-md">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6 text-center">
+            Upload Your Invoice
+          </h2>
+          <InvoiceUpload />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Share;
