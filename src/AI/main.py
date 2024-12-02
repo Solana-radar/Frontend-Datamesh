@@ -7,6 +7,9 @@ import os
 from io import BytesIO
 
 app = FastAPI()
+import os
+port = os.getenv("PORT", 5000)
+app.run(host='0.0.0.0', port=port)
 
 # Load API key
 openai.api_key = os.getenv("OPENAI_API_KEY")
