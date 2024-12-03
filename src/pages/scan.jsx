@@ -41,33 +41,35 @@ const SmartReceipts = () => {
 
     setStep(3); // Move to processing step
     processCapturedImage(imageData);
-
   };
 
-  // Simulate OCR & AI processing
+  // Process the captured image on the server
   const processCapturedImage = async (imageDataUrl) => {
     try {
       const blob = await fetch(imageDataUrl).then((res) => res.blob());
       const formData = new FormData();
       formData.append("file", blob, "receipt.png");
-  
-      const response = await fetch("http://localhost:8000/process-invoice/", {
-        method: "POST",
-        body: formData,
-      });
-  
+
+      const response = await fetch(
+        "https://frontend-datamesh.onrender.com/process-invoice/",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
       if (!response.ok) {
         throw new Error("Failed to process image");
       }
-  
+
       const result = await response.json();
       setData({
-        store: "Unknown", // Placeholder if store is not in result
-        amount: "Unknown", // Placeholder if amount is not parsed
-        date: "Unknown",   // Placeholder if date is not parsed
-        items: [],         // Placeholder if items are not extracted
+        store: result.store || "Unknown",
+        amount: result.amount || "Unknown",
+        date: result.date || "Unknown",
+        items: result.items || [],
         category: result.category || "Uncategorized",
-        timeFrame: "Unknown",
+        timeFrame: result.timeFrame || "Unknown",
       });
       setStep(4); // Move to results step
     } catch (error) {
@@ -75,7 +77,6 @@ const SmartReceipts = () => {
       setStep(1); // Reset to scanning on failure
     }
   };
-  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-gray-900 text-white flex flex-col items-center justify-center p-6 space-y-8">
@@ -169,8 +170,8 @@ const SmartReceipts = () => {
 
           <button
             onClick={() => {
-              setStep(1); // Reset to scanning
-              setData(null); // Clear data
+              setStep(1);
+              setData(null);
               setCapturedImage(null);
             }}
             className="bg-red-600 hover:bg-red-700 text-white py-2 px-6 rounded-full transition w-full"
