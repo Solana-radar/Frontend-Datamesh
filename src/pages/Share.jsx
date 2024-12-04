@@ -3,16 +3,23 @@ import { Share2, TrendingUp, Shield } from 'lucide-react';
 import { PublicKey, Transaction, SystemProgram, Connection } from '@solana/web3.js';
 import { FleekSdk, ApplicationAccessTokenService } from '@fleek-platform/sdk';
 import { WalletProvider, useWallet } from '@solana/wallet-adapter-react';
-//import { PhantomWalletAdapter } from '@solana/wallet-adapter-wallets';
 import * as anchor from "@project-serum/anchor";
+import CryptoJS from "crypto-js";
+import BN from 'bn.js';
 import idl from '../assets/idl/den.json';
 
+export const DEN_PROGRAM_INTERFACE = JSON.parse(JSON.stringify(idl));
 
-// Create a connection to the Solana Devnet
+const calculateInvoiceDataHashId = (input) => {
+    const hash = CryptoJS.SHA256(input).toString(CryptoJS.enc.Hex);
+    // Take the first 16 characters (8 bytes) from the hash and convert to BN
+    const u64Hex = hash.slice(0, 16); // First 8 bytes (16 hex characters)
+    const u64 = new BN(u64Hex, 16); // Convert from hex to BN
+    return u64;
+};
+
 const network = "https://api.devnet.solana.com";
-const connection = new Connection(network);
 
-//const wallets = useMemo(() => [new PhantomWalletAdapter()], []);
 const programId = new PublicKey(import.meta.env.VITE_SOL_PROGRAM_ID_DEVNET);
 
 const InvoiceUpload = () => {
@@ -34,72 +41,6 @@ const InvoiceUpload = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData({ ...formData, [name]: value });
-    };
-
-    const submitData = async () => {
-        try {
-            const [simplePDA] = await anchor.web3.PublicKey.findProgramAddress(
-                [Buffer.from('simpleSeed')],
-                programId
-            );
-            console.log(simplePDA.toString());
-            // Ensure wallet is connected
-            if (!wallet || !wallet.connected) {
-                alert("Please connect your wallet!");
-                return;
-            }
-
-            // Initialize connection and provider
-            const connection = new anchor.web3.Connection(network, "processed");
-            const provider = new anchor.AnchorProvider(connection, wallet, {
-                preflightCommitment: "processed",
-            });
-            anchor.setProvider(provider);
-
-            // Load the program
-            //const idl = await anchor.Program.fetchIdl(programId, provider);
-            const program = new anchor.Program(idl, programId, provider);
-
-            const { invoiceData, hsnNumber, amount, quantity, timestamp, imageProof } =
-                formData;
-
-            if (!invoiceData) {
-                alert("Invoice data is missing!");
-                return;
-            }
-            console.log("INVOICE DATA: " + invoiceData)
-
-            // Generate the PDA
-            const [uncheckedEconomicDataEntry] =
-                await anchor.web3.PublicKey.findProgramAddress(
-                    [Buffer.from("seed", 'utf-8')],
-                    programId
-                );
-
-            // Send the transaction
-            const tx = await program.methods
-                .submitEconomicData(
-                    formData.invoiceData,
-                    hsnNumber,
-                    new anchor.BN(amount), // Amount (u64)
-                    quantity, // Quantity (u32)
-                    new anchor.BN(timestamp), // Timestamp (i64)
-                    imageProof
-                )
-                .accounts({
-                    user: wallet.publicKey,
-                    uncheckedEconomicDataEntry,
-                    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-                    systemProgram: SystemProgram.programId,
-                })
-                .rpc();
-
-            console.log("Transaction successful:", tx);
-            alert("Data submitted successfully! Transaction ID: " + tx);
-        } catch (error) {
-            console.error("Error submitting economic data:", error);
-            alert("Error: " + error.message);
-        }
     };
 
     const handleFileChange = (e) => {
@@ -137,111 +78,65 @@ const InvoiceUpload = () => {
         setUploading(false);
     };
 
-    const signAndSubmitTest1 = async () => {
-        const { publicKey, sendTransaction } = useWallet();
-
-        if (!publicKey) {
-            alert("Please connect your Phantom wallet first!");
-            return;
-        }
-
-        try {
-            setLoading(true);
-
-            // Your Solana program's public key (replace with your deployed program ID)
-            const programId = new PublicKey("YOUR_SOLANA_PROGRAM_ID");
-
-            // Example of interacting with the program by creating a simple transaction
-            const transaction = new Transaction().add(
-                SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: new PublicKey("RECIPIENT_PUBLIC_KEY"), // Change this to your recipient's public key
-                    lamports: 1000000000, // Amount of SOL to transfer (1 SOL = 10^9 lamports)
-                })
-            );
-
-            // Send the transaction
-            const txHash = await sendTransaction(transaction, connection);
-            console.log("Transaction sent with hash:", txHash);
-
-            // Optionally confirm the transaction if needed
-            const confirmation = await connection.confirmTransaction(txHash, 'processed');
-            console.log("Transaction confirmed:", confirmation);
-
-            setLoading(false);
-        } catch (error) {
-            console.error("Error triggering program:", error);
-            setLoading(false);
-        }
-    };
-
-    const triggerSolanaProgramTest2 = async () => {
-        const { publicKey, sendTransaction } = useWallet();
-
-        if (!publicKey) {
-            alert("Please connect your Phantom wallet first!");
-            return;
-        }
-
-        try {
-            setLoading(true);
-
-            // Your Solana program's public key (replace with your deployed program ID)
-            const programId = new PublicKey("YOUR_SOLANA_PROGRAM_ID");
-
-            // Create an account to interact with the program, this may vary based on your program
-            const userAccount = new Keypair(); // Or use the user's publicKey for program accounts
-            const userAccountPublicKey = publicKey;
-
-            // Example of calling a program's function (instruction)
-            const instruction = new Transaction().add(
-                // Add a custom instruction to interact with your program
-                new TransactionInstruction({
-                    keys: [
-                        { pubkey: userAccountPublicKey, isSigner: true, isWritable: true },
-                        { pubkey: programId, isSigner: false, isWritable: false },
-                    ],
-                    programId: programId,
-                    data: Buffer.from(Uint8Array.of(1)) // Function identifier and data for your program
-                })
-            );
-
-            // Send the transaction
-            const txHash = await sendTransaction(instruction, connection);
-            console.log("Transaction sent with hash:", txHash);
-
-            // Optionally confirm the transaction if needed
-            const confirmation = await connection.confirmTransaction(txHash, 'processed');
-            console.log("Transaction confirmed:", confirmation);
-
-            setLoading(false);
-        } catch (error) {
-            console.error("Error triggering program:", error);
-            setLoading(false);
-        }
-    };
-
     const signAndSubmit = async () => {
-        if (!publicKey || !link) {
-            alert('Please connect your wallet and upload a file first!');
-            return;
-        }
-
         try {
-            const transaction = new Transaction().add(
-                // Example instruction: Replace with your actual Solana smart contract logic
-                {
-                    keys: [{ pubkey: publicKey, isSigner: true, isWritable: false }],
-                    programId: new PublicKey(programId),
-                    data: Buffer.from(link), // Sending the IPFS link to the program
-                }
+            if (!wallet || !wallet.connected) {
+                alert("Please connect your wallet!");
+                return;
+            }
+
+            const connection = new anchor.web3.Connection(network, "processed");
+            const provider = new anchor.AnchorProvider(connection, wallet, {
+                preflightCommitment: "processed",
+            });
+            anchor.setProvider(provider);
+            console.log("provider:", provider)
+
+            // Load the program
+            const program = new anchor.Program(DEN_PROGRAM_INTERFACE, programId, provider);
+
+
+            const { invoiceData, hsnNumber, amount, quantity, timestamp, imageProof } =
+                formData;
+
+            if (!invoiceData) {
+                alert("Invoice data is missing!");
+                return;
+            }
+            console.log("INVOICE DATA: " + invoiceData)
+            const invoiceDataHashId = calculateInvoiceDataHashId(invoiceData);
+            console.log("Invoice Data Hash ID:", invoiceDataHashId.toString());
+
+            let [economic_data_account] = anchor.web3.PublicKey.findProgramAddressSync(
+                [
+                    Buffer.from("economic_data"),
+                    wallet.publicKey.toBuffer(),
+                    new BN(invoiceDataHashId).toArrayLike(Buffer, "le", 8)
+                ],
+                program.programId
             );
 
-            const signature = await sendTransaction(transaction);
-            alert(`Transaction submitted! Signature: ${signature}`);
+            const tx = await program.methods
+                .submitEconomicData(
+                    invoiceDataHashId,
+                    invoiceData,
+                    hsnNumber,
+                    new anchor.BN(amount), // Amount (u64)
+                    quantity, // Quantity (u32)
+                    new anchor.BN(timestamp), // Timestamp (i64)
+                    imageProof
+                )
+                .accounts({
+                    economicDataAccount: economic_data_account,
+                    authority: wallet.publicKey,
+                })
+                .rpc();
+
+            console.log("Transaction:", tx);
+            alert("Data submitted successfully! Transaction: " + tx);
         } catch (error) {
-            console.error('Error submitting transaction:', error);
-            alert('Failed to submit transaction.');
+            console.error("Error submitting economic data:", error);
+            alert("Error: " + error.message);
         }
     };
 
@@ -271,62 +166,106 @@ const InvoiceUpload = () => {
                     >
                         {link}
                     </a>
-                    <button
+
+
+                    <form className="space-y-4">
+                        <div className="space-y-2">
+                            <label htmlFor="invoiceData" className="text-sm text-gray-600">
+                                Invoice Data
+                            </label>
+                            <input
+                                id="invoiceData"
+                                type="text"
+                                name="invoiceData"
+                                placeholder="Invoice Data"
+                                value={formData.invoiceData}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label htmlFor="hsnNumber" className="text-sm text-gray-600">
+                                HSN Number
+                            </label>
+                            <input
+                                id="hsnNumber"
+                                type="text"
+                                name="hsnNumber"
+                                placeholder="HSN Number"
+                                value={formData.hsnNumber}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label htmlFor="amount" className="text-sm text-gray-600">
+                                Amount
+                            </label>
+                            <input
+                                id="amount"
+                                type="number"
+                                name="amount"
+                                placeholder="Amount"
+                                value={formData.amount}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label htmlFor="quantity" className="text-sm text-gray-600">
+                                Quantity
+                            </label>
+                            <input
+                                id="quantity"
+                                type="number"
+                                name="quantity"
+                                placeholder="Quantity"
+                                value={formData.quantity}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label htmlFor="timestamp" className="text-sm text-gray-600">
+                                Timestamp
+                            </label>
+                            <input
+                                id="timestamp"
+                                type="datetime-local"
+                                name="timestamp"
+                                placeholder="Timestamp"
+                                value={new Date(formData.timestamp).toISOString().slice(0, 16)} // Convert timestamp to "yyyy-MM-ddTHH:mm"
+                                onChange={(e) =>
+                                    setFormData({ ...formData, timestamp: new Date(e.target.value).getTime() })
+                                }
+                                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label htmlFor="imageProof" className="text-sm text-gray-600">
+                                Image Proof URL
+                            </label>
+                            <input
+                                id="imageProof"
+                                type="text"
+                                name="imageProof"
+                                placeholder="Image Proof URL"
+                                value={formData.imageProof}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+                    </form>                    <button
                         onClick={signAndSubmit}
                         className="w-full px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700"
                     >
                         Sign & Submit to Solana
                     </button>
-
-                    <form>
-                        <input
-                            type="text"
-                            name="invoiceData"
-                            placeholder="Invoice Data"
-                            value={formData.invoiceData}
-                            onChange={handleChange}
-                        />
-                        <input
-                            type="text"
-                            name="hsnNumber"
-                            placeholder="HSN Number"
-                            value={formData.hsnNumber}
-                            onChange={handleChange}
-                        />
-                        <input
-                            type="number"
-                            name="amount"
-                            placeholder="Amount"
-                            value={formData.amount}
-                            onChange={handleChange}
-                        />
-                        <input
-                            type="number"
-                            name="quantity"
-                            placeholder="Quantity"
-                            value={formData.quantity}
-                            onChange={handleChange}
-                        />
-                        <input
-                            type="datetime-local"
-                            name="timestamp"
-                            placeholder="Timestamp"
-                            value={formData.timestamp}
-                            onChange={(e) =>
-                                setFormData({ ...formData, timestamp: new Date(e.target.value).getTime() })
-                            }
-                        />
-                        <input
-                            type="text"
-                            name="imageProof"
-                            placeholder="Image Proof URL"
-                            value={formData.imageProof}
-                            onChange={handleChange}
-                        />
-                        <button type="button" onClick={submitData}>
-                            Submit
-                        </button>
-                    </form>
                 </div>
             )}
         </div>
